@@ -1,0 +1,7 @@
+# Binaries
+*.exe
+*.out
+/go_solar_assistant
+
+# Build cache
+/vendor/

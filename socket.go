@@ -106,7 +106,7 @@ type Socket struct {
 	verbose       bool
 }
 
-const localDialTimeout = 2 * time.Second
+const localDialTimeout = 500 * time.Millisecond
 const dialTimeout = 5 * time.Second
 
 // Connect dials the SolarAssistant WebSocket and returns a ready Socket.
@@ -184,7 +184,7 @@ func dial(scheme, host, token string, local bool, siteID int, siteKey string, ti
 			case 401, 403:
 				return nil, fmt.Errorf("authentication failed (HTTP %d) — check your token", resp.StatusCode)
 			case 404:
-				return nil, fmt.Errorf("WebSocket endpoint not found (HTTP %d)", resp.StatusCode)
+				return nil, fmt.Errorf("WebSocket endpoint not found (HTTP 404) — site may be running an outdated version (requires build 2026-03-24 or later)")
 			case 502, 503, 504:
 				return nil, fmt.Errorf("site is offline or unreachable (HTTP %d)", resp.StatusCode)
 			default:

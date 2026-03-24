@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	sa "solar_assistant"
+	sa "github.com/Solar-Assistant/go_solar_assistant"
 )
 
 // Endpoint: GET /api/v1/sites

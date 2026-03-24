@@ -1,4 +1,4 @@
-module solar_assistant
+module github.com/Solar-Assistant/go_solar_assistant
 
 go 1.24.1
 

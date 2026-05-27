@@ -121,6 +121,7 @@ sock, err := device.Connect(device.Options{
     Token:   resp.Token,
     SiteID:  resp.SiteID,
     SiteKey: resp.SiteKey,
+    LocalIP: resp.LocalIP, // if set, tries local network first and falls back to cloud
 })
 if err != nil {
     log.Fatal(err)
@@ -134,20 +135,6 @@ if err := sock.SubscribeMetrics(func(m device.Metric) {
 }
 
 sock.Listen() // blocks
-```
-
-### Local fallback
-
-Set `LocalIP` to try the local network first and fall back to cloud if unreachable:
-
-```go
-sock, err := device.Connect(device.Options{
-    Host:    resp.Host,
-    Token:   resp.Token,
-    SiteID:  resp.SiteID,
-    SiteKey: resp.SiteKey,
-    LocalIP: resp.LocalIP,
-})
 ```
 
 ### Direct local connection (no cloud)

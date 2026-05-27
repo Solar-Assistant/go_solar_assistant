@@ -1,33 +1,11 @@
-// Package v1 implements the SolarAssistant cloud API v1 endpoints.
-//
-// All list/index endpoints accept a q parameter — a space-separated list of
-// key:value filter pairs — and standard limit/offset pagination params.
-// See [solar_assistant.Client.Get] for how these are sent.
-package v1
+package cloud
 
 import (
 	"encoding/json"
 	"fmt"
-
-	sa "github.com/Solar-Assistant/go_solar_assistant"
 )
 
-// Endpoint: GET /api/v1/sites
-//
-// Example filters:
-//
-//	name:my-site
-//	inverter:srne
-//	battery:daly
-//	inverter_params_output_power:5000
-//	last_seen_after:2026-01-01
-//	build_date_after:2026-02-26
 const sitesEndpoint = "/api/v1/sites"
-
-// Endpoint: POST /api/v1/sites/:id/authorize
-//
-// Returns a short-lived token for connecting to a site's WebSocket.
-// The token and SiteKey are used when connecting via the cloud.
 const sitesAuthorizeEndpoint = "/api/v1/sites/%d/authorize"
 
 type SiteOwner struct {
@@ -61,8 +39,10 @@ type AuthorizeResponse struct {
 	LocalIP  string `json:"local_ip"`
 }
 
-// ListSites queries sites using the provided filter args (key:value pairs).
-func ListSites(c *sa.Client, params map[string]any) ([]Site, error) {
+// ListSites queries sites using the provided filter params (key:value pairs).
+// Supported keys: name, inverter, battery, inverter_params_output_power,
+// last_seen_after, build_date_after, limit, offset.
+func (c *Client) ListSites(params map[string]any) ([]Site, error) {
 	body, err := c.Get(sitesEndpoint, params)
 	if err != nil {
 		return nil, err
@@ -74,8 +54,9 @@ func ListSites(c *sa.Client, params map[string]any) ([]Site, error) {
 	return sites, nil
 }
 
-// AuthorizeSite returns a token for connecting to a site's WebSocket.
-func AuthorizeSite(c *sa.Client, siteID int) (*AuthorizeResponse, error) {
+// AuthorizeSite returns a short-lived token and connection details for a site.
+// The token can be used for both cloud and direct local WebSocket connections.
+func (c *Client) AuthorizeSite(siteID int) (*AuthorizeResponse, error) {
 	body, err := c.Post(fmt.Sprintf(sitesAuthorizeEndpoint, siteID))
 	if err != nil {
 		return nil, err

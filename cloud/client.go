@@ -1,5 +1,5 @@
-// HTTP client for the SolarAssistant cloud API.
-package solar_assistant
+// Package cloud implements the SolarAssistant cloud API client.
+package cloud
 
 import (
 	"fmt"
@@ -36,10 +36,8 @@ var paginationKeys = map[string]bool{"limit": true, "offset": true}
 // Get calls GET <path> on the API.
 //
 // params is a map of filters for index/list endpoints. The keys "limit" and
-// "offset" are sent as top-level query params (integer values). All other
-// keys are joined as "key:value" pairs and sent as the ?q= parameter, which
-// is the standard filter mechanism across all v1 list endpoints.
-// Pass nil or an empty map to fetch all records.
+// "offset" are sent as top-level query params. All other keys are joined as
+// "key:value" pairs and sent as the ?q= parameter.
 func (c *Client) Get(path string, params map[string]any) ([]byte, error) {
 	u, err := url.Parse(c.BaseURL + path)
 	if err != nil {

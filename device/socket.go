@@ -2,15 +2,15 @@
 //
 // Basic usage:
 //
-//	sock, err := sa_socket.Connect(sa_socket.Options{
+//	sock, err := device.Connect(device.Options{
 //	    Host:  "192.168.1.100",
 //	    Token: "<token>",
 //	})
-//	sock.SubscribeMetrics(func(m sa_socket.Metric) {
+//	sock.SubscribeMetrics(func(m device.Metric) {
 //	    fmt.Printf("%s/%s = %v %v\n", m.Device, m.Name, m.Value, m.Unit)
 //	})
 //	sock.Listen()  // blocks
-package solar_assistant
+package device
 
 import (
 	"context"
@@ -30,6 +30,8 @@ import (
 )
 
 const heartbeatInterval = 30 * time.Second
+const localDialTimeout = 500 * time.Millisecond
+const dialTimeout = 5 * time.Second
 
 // Options configures a WebSocket connection to SolarAssistant.
 type Options struct {
@@ -42,7 +44,7 @@ type Options struct {
 	LocalIP string
 
 	// Token is the JWT used to authenticate cloud connections.
-	// Obtained via the AuthorizeSite API endpoint.
+	// Obtained via the cloud.Client.AuthorizeSite API endpoint.
 	Token string
 
 	// Password is the web password for direct local connections.
@@ -59,21 +61,10 @@ type Options struct {
 	Verbose bool
 }
 
-// Metric is a single metric value received from the device.
-type Metric struct {
-	Topic  string
-	Device string
-	Number int
-	Group  string
-	Name   string
-	Value  any
-	Unit   string
-}
-
 // TopicFilter specifies a topic glob pattern and optional throttling for metric subscriptions.
 type TopicFilter struct {
-	Topic        string `json:"topic"`
-	MaxFrequencyS int   `json:"max_frequency_s,omitempty"`
+	Topic         string `json:"topic"`
+	MaxFrequencyS int    `json:"max_frequency_s,omitempty"`
 }
 
 // MetricHandler is called for each incoming metric.
@@ -96,7 +87,7 @@ type subscription struct {
 	fn           MessageHandler
 }
 
-// Socket is a connected SolarAssistant socket.
+// Socket is a connected SolarAssistant WebSocket.
 type Socket struct {
 	conn          *websocket.Conn
 	ref           atomic.Int64
@@ -106,15 +97,11 @@ type Socket struct {
 	verbose       bool
 }
 
-const localDialTimeout = 500 * time.Millisecond
-const dialTimeout = 5 * time.Second
-
 // Connect dials the SolarAssistant WebSocket and returns a ready Socket.
 // If LocalIP is set, tries WS on the local address first (units do not
 // expose port 443), then falls back to the cloud proxy host.
 func Connect(opts Options) (*Socket, error) {
 	if opts.LocalIP != "" {
-		// If Password is set, use ?password= auth. Otherwise use the cloud JWT via ?token=.
 		credential, isPassword := opts.Token, false
 		if opts.Password != "" {
 			credential, isPassword = opts.Password, true
@@ -128,7 +115,6 @@ func Connect(opts Options) (*Socket, error) {
 			return nil, fmt.Errorf("could not connect to %s: %w", opts.LocalIP, err)
 		}
 	}
-	// Fall back to cloud proxy
 	sock, err := dial("wss", opts.Host, opts.Token, false, opts.SiteID, opts.SiteKey, dialTimeout, nil, opts.Verbose)
 	if err != nil {
 		return nil, err
@@ -137,9 +123,6 @@ func Connect(opts Options) (*Socket, error) {
 	return sock, nil
 }
 
-// dial connects to the WebSocket endpoint.
-// For local connections (local=true) the credential is sent as ?password=
-// For cloud connections (local=false) it is sent as ?token= with site headers.
 func dial(scheme, host, token string, local bool, siteID int, siteKey string, timeout time.Duration, tlsCfg *tls.Config, verbose bool) (*Socket, error) {
 	u := &url.URL{
 		Scheme: scheme,

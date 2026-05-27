@@ -13,24 +13,21 @@ go get github.com/Solar-Assistant/go_solar_assistant
 Interact with the SolarAssistant cloud API. All endpoints require an API key — generate one at [solar-assistant.io/user/edit#api](https://solar-assistant.io/user/edit#api).
 
 ```go
-import (
-    sa  "github.com/Solar-Assistant/go_solar_assistant"
-    api "github.com/Solar-Assistant/go_solar_assistant/api/v1"
-)
+import "github.com/Solar-Assistant/go_solar_assistant/cloud"
 
-client := sa.NewClient("<api_key>")
+client := cloud.NewClient("<api_key>")
 ```
 
 ### List sites
 
 ```go
-sites, err := api.ListSites(client, nil)
+sites, err := client.ListSites(nil)
 ```
 
 Filter by inverter, battery, name, and more:
 
 ```go
-sites, err := api.ListSites(client, map[string]any{
+sites, err := client.ListSites(map[string]any{
     "inverter": "srne",
     "limit":    50,
     "offset":   20,
@@ -52,25 +49,74 @@ Common filters:
 
 ### Authorize a site
 
-Returns a token for connecting to a site's WebSocket, along with the host and site key needed for a [cloud connection](#cloud-connection).
+Returns a short-lived token and connection details for a site. The token works for both cloud and local connections.
 
 ```go
-resp, err := api.AuthorizeSite(client, siteID)
-// resp.Host, resp.SiteKey, resp.Token
+resp, err := client.AuthorizeSite(siteID)
+// resp.Host, resp.SiteID, resp.SiteKey, resp.Token, resp.LocalIP
 ```
 
 ---
 
-## Real-time metrics
+## Device — REST
 
-Connect to a SolarAssistant unit and stream live metrics.
+Read and write metrics directly on a SolarAssistant unit via REST.
+
+```go
+import "github.com/Solar-Assistant/go_solar_assistant/device"
+```
+
+### Local connection
+
+```go
+c := device.NewClient("192.168.1.100")
+c.Password = "<web-password>" // set at http://<your-unit>/configuration/system
+```
+
+### Cloud-proxied connection
+
+First obtain connection details via [AuthorizeSite](#authorize-a-site):
+
+```go
+c := device.NewClient(resp.Host)
+c.Scheme  = "https"
+c.Token   = resp.Token
+c.SiteID  = resp.SiteID
+c.SiteKey = resp.SiteKey
+```
+
+### Read metrics
+
+```go
+// All metrics
+metrics, err := c.GetMetrics()
+
+// Filtered by topic glob
+metrics, err := c.GetMetrics("battery_1/*", "total/pv_power")
+```
+
+### Write a metric
+
+```go
+err := c.SetMetric("inverter_1/charge_current_limit", "20")
+```
+
+---
+
+## Device — WebSocket
+
+Stream live metrics via WebSocket.
+
+```go
+import "github.com/Solar-Assistant/go_solar_assistant/device"
+```
 
 ### Cloud connection
 
-First obtain a token via [AuthorizeSite](#authorize-a-site), then connect using the fields from the response:
+First obtain connection details via [AuthorizeSite](#authorize-a-site):
 
 ```go
-sock, err := sa.Connect(sa.Options{
+sock, err := device.Connect(device.Options{
     Host:    resp.Host,
     Token:   resp.Token,
     SiteID:  resp.SiteID,
@@ -81,7 +127,7 @@ if err != nil {
 }
 defer sock.Close()
 
-if err := sock.SubscribeMetrics(func(m sa.Metric) {
+if err := sock.SubscribeMetrics(func(m device.Metric) {
     fmt.Printf("%s/%s = %v %v\n", m.Device, m.Name, m.Value, m.Unit)
 }); err != nil {
     log.Fatal(err)
@@ -90,24 +136,12 @@ if err := sock.SubscribeMetrics(func(m sa.Metric) {
 sock.Listen() // blocks
 ```
 
-Example metrics:
-
-```
-Totals/Battery voltage         = 53.1  V
-Totals/Battery state of charge = 92    %
-Totals/PV power                = 1240  W
-Totals/Load power              = 860   W
-Totals/Grid power              = -380  W
-Inverters/Battery voltage      = 53.1  V
-Inverters/PV power             = 1240  W
-```
-
 ### Local fallback
 
-Set `LocalIP` to transparently try the local network first and fall back to cloud if unreachable. The cloud JWT works for local connections too:
+Set `LocalIP` to try the local network first and fall back to cloud if unreachable:
 
 ```go
-sock, err := sa.Connect(sa.Options{
+sock, err := device.Connect(device.Options{
     Host:    resp.Host,
     Token:   resp.Token,
     SiteID:  resp.SiteID,
@@ -118,32 +152,44 @@ sock, err := sa.Connect(sa.Options{
 
 ### Direct local connection (no cloud)
 
-Connect directly using the unit's web password (set at `http://<your-unit>/configuration/system`), with no cloud account required:
+Connect using the unit's web password, no cloud account required:
 
 ```go
-sock, err := sa.Connect(sa.Options{
+sock, err := device.Connect(device.Options{
     Host:     "192.168.1.100",
     Password: "<web-password>",
 })
 ```
 
+### Topic filters
+
+Subscribe to specific topics with optional server-side throttling:
+
+```go
+sock.SubscribeMetrics(fn,
+    device.TopicFilter{Topic: "battery_1/*"},
+    device.TopicFilter{Topic: "total/pv_power", MaxFrequencyS: 10},
+)
+```
+
+If no filters are passed the server applies a default set of common metrics (`total/*`, battery voltages and SOC, inverter PV/load/grid power, etc.).
+
 ### Options
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `Host` | `string` | Hostname or host:port. Uses `wss://` unless it starts with `localhost` or `127.0.0.1`. |
+| `Host` | `string` | Hostname or host:port of the cloud proxy. |
 | `Token` | `string` | JWT from `AuthorizeSite`. Required for cloud and local-fallback connections. |
-| `Password` | `string` | Web password for direct local connections (set at `/configuration/system`). |
-| `SiteID` | `int` | Required for cloud connections. Omit for direct local connections. |
-| `SiteKey` | `string` | Required for cloud connections. Omit for direct local connections. |
+| `Password` | `string` | Web password for direct local connections. |
+| `SiteID` | `int` | Required for cloud connections. |
+| `SiteKey` | `string` | Required for cloud connections. |
 | `LocalIP` | `string` | If set, tries local network first and falls back to `Host`. |
+| `Verbose` | `bool` | Log all WebSocket frames to stderr. |
 
 ### Advanced: raw channel messages
 
-For low-level access, use `Subscribe` directly. `"*"` is a wildcard for topic or event:
-
 ```go
-sock.Subscribe("*", "*", func(msg sa.Message) {
+sock.Subscribe("*", "*", func(msg device.Message) {
     fmt.Println(msg.Topic, msg.Event, msg.Payload)
 })
 ```

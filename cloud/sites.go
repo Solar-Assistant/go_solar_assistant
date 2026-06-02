@@ -9,7 +9,10 @@ const sitesEndpoint = "/api/v1/sites"
 const sitesAuthorizeEndpoint = "/api/v1/sites/%d/authorize"
 
 type SiteOwner struct {
-	Email string `json:"email"`
+	ID        int    `json:"id"`
+	Email     string `json:"email"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
 }
 
 type Site struct {
@@ -22,11 +25,12 @@ type Site struct {
 	BatteryCount   int            `json:"battery_count"`
 	BatteryParams  map[string]any `json:"battery_params"`
 	Proxy          string         `json:"proxy"`
-	WebPort        any            `json:"web_port"`
-	SSHPort        any            `json:"ssh_port"`
 	Arch           string         `json:"arch"`
+	Board          string         `json:"board"`
+	Beta           bool           `json:"beta"`
 	BuildDate      string         `json:"build_date"`
 	LastSeenAt     string         `json:"last_seen_at"`
+	LocalIP        string         `json:"local_ip"`
 	Owner          SiteOwner      `json:"owner"`
 }
 

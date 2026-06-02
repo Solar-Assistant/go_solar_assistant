@@ -275,6 +275,61 @@ func (s *Socket) joinWithPayload(topic string, payload map[string]any) error {
 	return s.send(joinRef, s.nextRef(), topic, "phx_join", payload)
 }
 
+// SetSetting writes a setting via the metrics channel.
+// Joins the metrics channel, sends a set message, and waits for the set_result reply.
+// Must not be called concurrently with Listen.
+func (s *Socket) SetSetting(topic, value string) error {
+	joinRef := s.nextRef()
+	if err := s.send(joinRef, s.nextRef(), "metrics", "phx_join", map[string]any{}); err != nil {
+		return err
+	}
+	for {
+		_, raw, err := s.conn.ReadMessage()
+		if err != nil {
+			return err
+		}
+		if s.verbose {
+			fmt.Fprintf(os.Stderr, "< recv %s\n", raw)
+		}
+		msg, err := decode(raw)
+		if err != nil {
+			continue
+		}
+		if msg.Topic == "metrics" && msg.Event == "phx_reply" {
+			if strVal(msg.Payload["status"]) != "ok" {
+				return fmt.Errorf("metrics join failed: %s", strVal(msg.Payload["status"]))
+			}
+			break
+		}
+	}
+
+	if err := s.send(joinRef, s.nextRef(), "metrics", "set", map[string]any{"topic": topic, "value": value}); err != nil {
+		return err
+	}
+	for {
+		_, raw, err := s.conn.ReadMessage()
+		if err != nil {
+			return err
+		}
+		if s.verbose {
+			fmt.Fprintf(os.Stderr, "< recv %s\n", raw)
+		}
+		msg, err := decode(raw)
+		if err != nil {
+			continue
+		}
+		if msg.Event == "set_result" && strVal(msg.Payload["topic"]) == topic {
+			if strVal(msg.Payload["result"]) != "ok" {
+				if m := strVal(msg.Payload["message"]); m != "" {
+					return errors.New(m)
+				}
+				return errors.New("unknown error")
+			}
+			return nil
+		}
+	}
+}
+
 // Subscribe registers a handler for a specific topic and event.
 // Use "*" as a wildcard for either field.
 // For metrics use SubscribeMetrics instead.

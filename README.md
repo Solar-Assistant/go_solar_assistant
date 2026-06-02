@@ -1,6 +1,6 @@
 # go_solar_assistant
 
-Go client for SolarAssistant.
+Go client for SolarAssistant. Also available in [Python](https://github.com/Solar-Assistant/py_solar_assistant).
 
 ## Installation
 
@@ -161,6 +161,21 @@ sock.SubscribeMetrics(fn,
 
 If no filters are passed the server applies a default set of common metrics (`total/*`, battery voltages and SOC, inverter PV/load/grid power, etc.).
 
+### Write a setting
+
+```go
+sock, err := device.Connect(device.Options{
+    Host:     "192.168.1.100",
+    Password: "<web-password>",
+})
+if err != nil {
+    log.Fatal(err)
+}
+defer sock.Close()
+
+err = sock.SetSetting("inverter_1/power_mode", "Off grid with relay")
+```
+
 ### Options
 
 | Field | Type | Description |
@@ -180,3 +195,9 @@ sock.Subscribe("*", "*", func(msg device.Message) {
     fmt.Println(msg.Topic, msg.Event, msg.Payload)
 })
 ```
+
+## License
+
+Apache 2.0 — see [LICENSE](LICENSE).
+
+This licence covers the Go client library in this repository only. The SolarAssistant platform — including the downloadable device software and cloud infrastructure — is proprietary and distributed under separate terms.

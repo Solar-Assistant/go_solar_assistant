@@ -10,7 +10,7 @@ go get github.com/Solar-Assistant/go_solar_assistant
 
 ## Cloud API
 
-Interact with the SolarAssistant cloud API. All endpoints require an API key — generate one at [solar-assistant.io/user/edit#api](https://solar-assistant.io/user/edit#api).
+Interact with the SolarAssistant cloud API. All endpoints require an API key — generate one at [solar-assistant.io/user/edit#api](https://solar-assistant.io/user/edit#api). Full API reference: [solar-assistant.io/help/integration/cloud-api](https://solar-assistant.io/help/integration/cloud-api) · [OpenAPI spec](https://solar-assistant.io/openapi.yaml).
 
 ```go
 import "github.com/Solar-Assistant/go_solar_assistant/cloud"
@@ -53,7 +53,13 @@ Returns a short-lived token and connection details for a site. The token works f
 
 ```go
 resp, err := client.AuthorizeSite(siteID)
-// resp.Host, resp.SiteID, resp.SiteKey, resp.Token, resp.LocalIP
+// resp.Host, resp.SiteID, resp.SiteKey, resp.Token, resp.LocalIP, resp.SiteHost
+```
+
+Roles are requested, never assumed. Ask for `ssh` to get a token that may open an SSH session; the API answers 403 unless the site has SolarAssistant Pro and you hold the SSH grant on it.
+
+```go
+resp, err := client.AuthorizeSite(siteID, "ssh")
 ```
 
 ---

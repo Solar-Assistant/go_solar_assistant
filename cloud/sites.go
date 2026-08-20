@@ -3,6 +3,8 @@ package cloud
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"strings"
 )
 
 const sitesEndpoint = "/api/v1/sites"
@@ -41,6 +43,13 @@ type AuthorizeResponse struct {
 	SiteKey  string `json:"site_key"`
 	Token    string `json:"token"`
 	LocalIP  string `json:"local_ip"`
+
+	// SiteHost is the stable site DNS name (e.g. "my-site.us.solar-assistant.io").
+	// May be empty if the site has no proxy assigned yet.
+	// Use as the SSH hostname for per-site known_hosts tracking — avoids all
+	// sites on the same proxy sharing one fingerprint. Actual TCP connections
+	// still go through Host to avoid DNS propagation delays when proxy changes.
+	SiteHost string `json:"site_host,omitempty"`
 }
 
 // ListSites queries sites using the provided filter params (key:value pairs).
@@ -60,8 +69,17 @@ func (c *Client) ListSites(params map[string]any) ([]Site, error) {
 
 // AuthorizeSite returns a short-lived token and connection details for a site.
 // The token can be used for both cloud and direct local WebSocket connections.
-func (c *Client) AuthorizeSite(siteID int) (*AuthorizeResponse, error) {
-	body, err := c.Post(fmt.Sprintf(sitesAuthorizeEndpoint, siteID))
+//
+// Roles are requested, never assumed. Pass "ssh" for a token that may open an SSH
+// session; the API answers 403 if the caller holds no SSH grant on that site.
+// Passing no roles asks for the cloud's defaults, which never include "ssh".
+func (c *Client) AuthorizeSite(siteID int, roles ...string) (*AuthorizeResponse, error) {
+	path := fmt.Sprintf(sitesAuthorizeEndpoint, siteID)
+	if len(roles) > 0 {
+		path += "?" + url.Values{"roles": {strings.Join(roles, ",")}}.Encode()
+	}
+
+	body, err := c.Post(path)
 	if err != nil {
 		return nil, err
 	}
